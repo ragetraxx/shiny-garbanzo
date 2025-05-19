@@ -1,3 +1,4 @@
+<script>
 document.addEventListener("DOMContentLoaded", () => {
   const featured = [
     {
@@ -44,8 +45,8 @@ document.addEventListener("DOMContentLoaded", () => {
     featuredContainer.appendChild(createChannelCard(channel));
   });
 
-  // Fetch and search channels from JSON
-  fetch("https://raw.githubusercontent.com/TVGarden/tv-garden-channel-list/refs/heads/main/channels/raw/categories/all-channels.json")
+  // Fetch and search channels from local JSON file
+  fetch("all-channels.json")
     .then(response => response.json())
     .then(data => {
       let allChannels = [];
@@ -72,3 +73,4 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 });
+</script>
