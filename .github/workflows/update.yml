@@ -2,17 +2,17 @@ name: Update Playlist
 
 on:
   schedule:
-    - cron: "0 */2 * * *"  # Every 2 hours
-  workflow_dispatch:
+    - cron: "0 */2 * * *"  # every 2 hours
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -20,13 +20,14 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: pip install requests
 
-      - name: Run scraper
-        run: python scrape.py
+      - name: Run scrape.py to generate playlist.m3u
+        run: |
+          python scrape.py
 
-      - name: Commit playlist if it exists
+      - name: Commit playlist.m3u if it exists
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
