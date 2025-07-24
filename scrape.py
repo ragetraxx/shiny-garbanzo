@@ -11,29 +11,46 @@ playlist_file = "playlist.m3u"
 with open(playlist_file, "w", encoding="utf-8") as f:
     f.write("#EXTM3U\n\n")
 
-# Load channel page URLs
+# Load channel URLs from file
 with open("channels.txt", "r", encoding="utf-8") as f:
     urls = [line.strip() for line in f if line.strip()]
 
 for url in urls:
     try:
+        print(f"[...] Processing: {url}")
         res = requests.get(url, headers=headers, timeout=15)
         html = res.text
 
-        # Match full tokenized m3u8 URL
-        match = re.search(r'(https?://[^\s"\']+\.m3u8\?[^"\']+)', html)
-        if match:
-            m3u8_url = match.group(1)
+        # Step 1: Extract iframe URL
+        iframe_match = re.search(r'<iframe[^>]+src=["\']([^"\']+thetvapp[^"\']+)["\']', html)
+        if not iframe_match:
+            print(f"[✘] No iframe found on page: {url}")
+            continue
 
-            # Extract clean channel name from URL path (e.g., 'fanduel-sports-network-socal')
-            slug = re.search(r'/([^/]+)/tracks', m3u8_url)
-            channel_name = slug.group(1).replace('-', ' ').title() if slug else 'Unknown Channel'
+        iframe_url = iframe_match.group(1)
+        if not iframe_url.startswith("http"):
+            iframe_url = "https:" + iframe_url
 
-            with open(playlist_file, "a", encoding="utf-8") as f:
-                f.write(f'#EXTINF:-1 tvg-id="" tvg-name="{channel_name}" tvg-logo="" group-title="TVPass",{channel_name}\n{m3u8_url}\n\n')
+        # Step 2: Fetch thetvapp iframe page
+        iframe_res = requests.get(iframe_url, headers=headers, timeout=15)
+        iframe_html = iframe_res.text
 
-            print(f"[✔] {channel_name} added")
-        else:
-            print(f"[✘] No m3u8 found for: {url}")
+        # Step 3: Extract full m3u8 link with token
+        m3u8_match = re.search(r'(https?://[^\s"\']+\.m3u8\?[^"\']+)', iframe_html)
+        if not m3u8_match:
+            print(f"[✘] No m3u8 found in iframe: {iframe_url}")
+            continue
+
+        m3u8_url = m3u8_match.group(1)
+
+        # Extract clean channel name
+        slug = re.search(r'/([^/]+)/tracks', m3u8_url)
+        channel_name = slug.group(1).replace('-', ' ').title() if slug else 'Unknown Channel'
+
+        with open(playlist_file, "a", encoding="utf-8") as f:
+            f.write(f'#EXTINF:-1 tvg-id="" tvg-name="{channel_name}" tvg-logo="" group-title="TVPass",{channel_name}\n{m3u8_url}\n\n')
+
+        print(f"[✔] {channel_name} added")
+
     except Exception as e:
-        print(f"[⚠] Error fetching {url}: {e}")
+        print(f"[⚠] Error processing {url}: {e}")
