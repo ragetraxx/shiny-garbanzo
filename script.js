@@ -8,7 +8,7 @@ let allChannels = [];
 
 // Fetch and parse M3U
 async function loadChannels() {
-  const res = await fetch("https://raw.githubusercontent.com/ragetraxx/epg-auto/refs/heads/main/rageteevee.m3u");
+  const res = await fetch("https://snapvisionxo.pages.dev/scripts/channel.js");
   const text = await res.text();
   allChannels = parseM3U(text);
   displayChannels(allChannels);
