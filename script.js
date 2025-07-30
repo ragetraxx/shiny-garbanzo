@@ -1,83 +1,98 @@
-const genreSections = document.getElementById("genreSections");
+const channelList = document.getElementById("channelList");
 const playerOverlay = document.getElementById("playerOverlay");
 const videoPlayer = document.getElementById("videoPlayer");
 const closePlayer = document.getElementById("closePlayer");
 const searchInput = document.getElementById("searchInput");
-const categoryFilter = document.getElementById("categoryFilter");
 
 let allChannels = [];
-let allCategories = [];
 
-// Load channels & categories
-async function loadData() {
-  const [channelsRes, categoriesRes] = await Promise.all([
-    fetch("https://iptv-org.github.io/api/channels.json"),
-    fetch("https://iptv-org.github.io/api/categories.json")
-  ]);
-
-  allChannels = await channelsRes.json();
-  allCategories = await categoriesRes.json();
-
-  // Populate country dropdown
-  const countries = [...new Set(allChannels.map(c => c.country || "Unknown"))].sort();
-  countries.forEach(ct => {
-    const option = document.createElement("option");
-    option.value = ct;
-    option.textContent = ct;
-    categoryFilter.appendChild(option);
-  });
-
-  displayGenres();
+// Fetch and parse M3U
+async function loadChannels() {
+  const res = await fetch("https://raw.githubusercontent.com/ragetraxx/epg-auto/refs/heads/main/rageteevee.m3u");
+  const text = await res.text();
+  allChannels = parseM3U(text);
+  displayChannels(allChannels);
 }
 
-// Display genre rows
-function displayGenres() {
-  genreSections.innerHTML = "";
+// Parse M3U to objects
+function parseM3U(data) {
+  const lines = data.split("\n");
+  const channels = [];
+  let current = {};
 
-  allCategories.forEach(cat => {
-    const section = document.createElement("div");
-    section.className = "genre-section";
-
-    const title = document.createElement("h2");
-    title.className = "genre-title";
-    title.textContent = cat.name;
-
-    const row = document.createElement("div");
-    row.className = "channel-row";
-
-    const genreChannels = allChannels.filter(ch => ch.category === cat.id);
-    genreChannels.forEach(ch => {
-      if (!filterMatch(ch)) return;
-
-      const card = document.createElement("div");
-      card.className = "channel-card";
-      card.innerHTML = `
-        <img src="${ch.logo || 'https://via.placeholder.com/150x100?text=No+Logo'}" alt="${ch.name}">
-        <div class="channel-name">${ch.name}</div>
-      `;
-      card.addEventListener("click", () => playChannel(ch.url));
-      row.appendChild(card);
-    });
-
-    if (row.childElementCount > 0) {
-      section.appendChild(title);
-      section.appendChild(row);
-      genreSections.appendChild(section);
+  lines.forEach(line => {
+    line = line.trim();
+    if (line.startsWith("#EXTINF:")) {
+      const nameMatch = line.match(/,(.*)$/);
+      const logoMatch = line.match(/tvg-logo="(.*?)"/);
+      const keyMatch = data.match(/#KODIPROP:inputstream\.adaptive\.license_key=(.*?):(.*?)\n/);
+      current = {
+        name: nameMatch ? nameMatch[1] : "Unknown",
+        logo: logoMatch ? logoMatch[1] : "",
+        clearkey: keyMatch ? { kid: keyMatch[1], key: keyMatch[2] } : null,
+      };
+    } else if (line && !line.startsWith("#")) {
+      current.url = line;
+      channels.push({ ...current });
     }
+  });
+  return channels;
+}
+
+// Display channels
+function displayChannels(channels) {
+  channelList.innerHTML = "";
+  channels.forEach(channel => {
+    const card = document.createElement("div");
+    card.className = "channel-card";
+    card.innerHTML = `
+      <img src="${channel.logo || 'https://via.placeholder.com/150x100?text=No+Logo'}" alt="${channel.name}">
+      <div class="channel-name">${channel.name}</div>
+      ${channel.clearkey ? '<div class="drm-label">ClearKey</div>' : ""}
+    `;
+    card.addEventListener("click", () => playChannel(channel));
+    channelList.appendChild(card);
   });
 }
 
 // Play selected channel
-function playChannel(url) {
-  if (!url) return alert("Stream URL not available.");
-  if (Hls.isSupported()) {
-    const hls = new Hls();
-    hls.loadSource(url);
-    hls.attachMedia(videoPlayer);
-  } else if (videoPlayer.canPlayType("application/vnd.apple.mpegurl")) {
-    videoPlayer.src = url;
-  }
+async function playChannel(channel) {
+  const url = channel.url;
+
+  // Clear any previous playback
+  videoPlayer.pause();
+  videoPlayer.src = "";
   playerOverlay.style.display = "flex";
+
+  if (url.endsWith(".m3u8")) {
+    // Play M3U8 with HLS.js
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(videoPlayer);
+    } else {
+      videoPlayer.src = url;
+    }
+  } 
+  else if (url.endsWith(".mpd") && channel.clearkey) {
+    // Play MPD with Shaka + ClearKey
+    const player = new shaka.Player(videoPlayer);
+    player.configure({
+      drm: {
+        clearKeys: {
+          [channel.clearkey.kid]: channel.clearkey.key
+        }
+      }
+    });
+    try {
+      await player.load(url);
+    } catch (err) {
+      alert("Error playing MPD: " + err);
+    }
+  } 
+  else {
+    alert("Unsupported stream format or missing ClearKey!");
+  }
 }
 
 // Close player
@@ -87,19 +102,15 @@ closePlayer.addEventListener("click", () => {
   playerOverlay.style.display = "none";
 });
 
-// Search and filter
-searchInput.addEventListener("input", displayGenres);
-categoryFilter.addEventListener("change", displayGenres);
-
-function filterMatch(channel) {
-  const searchTerm = searchInput.value.toLowerCase();
-  const selectedCountry = categoryFilter.value;
-
-  const matchesSearch = channel.name.toLowerCase().includes(searchTerm);
-  const matchesCountry = selectedCountry === "all" || channel.country === selectedCountry;
-
-  return matchesSearch && matchesCountry;
-}
+// Search filter
+searchInput.addEventListener("input", () => {
+  const term = searchInput.value.toLowerCase();
+  const filtered = allChannels.filter(ch => ch.name.toLowerCase().includes(term));
+  displayChannels(filtered);
+});
 
 // Initialize
-loadData();
+document.addEventListener("DOMContentLoaded", () => {
+  shaka.polyfill.installAll(); // Initialize Shaka
+  loadChannels();
+});
