@@ -1,32 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TV Garden</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.9.3/shaka-player.compiled.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RageTV+</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
   <header>
-    <h1>IPTVflix</h1>
-    <div class="search-container">
-      <input type="text" id="searchInput" placeholder="Search channels...">
-    </div>
+    <h1>RageTV+</h1>
+    <p id="providerMsg"></p>
   </header>
 
   <main>
-    <section class="channel-list" id="channelList"></section>
+    <div id="channelGrid" class="grid"></div>
+    <div class="player-wrapper">
+      <video id="videoPlayer" controls autoplay></video>
+    </div>
   </main>
 
-  <div class="player-overlay" id="playerOverlay">
-    <div class="player-container">
-      <video id="videoPlayer" controls autoplay></video>
-      <button id="closePlayer">✕</button>
-    </div>
-  </div>
-
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
