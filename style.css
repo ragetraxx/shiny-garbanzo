@@ -1,4 +1,4 @@
-/* Netflix-style UI */
+/* Netflix-style UI with player on top and smaller icons */
 
 body {
   margin: 0;
@@ -25,41 +25,6 @@ header h1 {
   font-size: 0.9rem;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 20px;
-  padding: 30px;
-}
-
-.channel {
-  cursor: pointer;
-  position: relative;
-  transition: transform 0.2s ease-in-out;
-}
-
-.channel img {
-  width: 100%;
-  border-radius: 10px;
-  border: 3px solid transparent;
-  transition: 0.3s;
-}
-
-.channel:hover {
-  transform: scale(1.05);
-}
-
-.channel:hover img {
-  border-color: #e50914;
-}
-
-.channel p {
-  text-align: center;
-  margin: 10px 0 0;
-  font-size: 0.95rem;
-  color: #fff;
-}
-
 .player-wrapper {
   padding: 20px;
   text-align: center;
@@ -71,4 +36,40 @@ video {
   border-radius: 10px;
   border: 3px solid #e50914;
   background: #000;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 15px;
+  padding: 20px 30px 50px;
+  justify-items: center;
+}
+
+.channel {
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+  text-align: center;
+}
+
+.channel img {
+  width: 100%;
+  max-width: 100px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: 0.3s;
+}
+
+.channel:hover {
+  transform: scale(1.08);
+}
+
+.channel:hover img {
+  border-color: #e50914;
+}
+
+.channel p {
+  font-size: 0.8rem;
+  margin-top: 5px;
+  color: #eee;
 }
