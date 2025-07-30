@@ -3,23 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IPTVflix</title>
+  <title>TV Garden</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.9.3/shaka-player.compiled.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>TV Garden</h1>
+    <h1>IPTVflix</h1>
     <div class="search-container">
       <input type="text" id="searchInput" placeholder="Search channels...">
-      <select id="categoryFilter">
-        <option value="all">All Countries</option>
-      </select>
     </div>
   </header>
 
-  <main id="genreSections">
-    <!-- Genre rows load dynamically -->
+  <main>
+    <section class="channel-list" id="channelList"></section>
   </main>
 
   <div class="player-overlay" id="playerOverlay">
