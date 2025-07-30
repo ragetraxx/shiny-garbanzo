@@ -1,20 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TV Garden Player</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPTVflix</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>TV Garden Player</h1>
-    <input type="text" id="searchInput" placeholder="Search channels..." />
-    
-    <div id="searchResults" class="channel-grid"></div>
+  <header>
+    <h1>TV Garden</h1>
+    <div class="search-container">
+      <input type="text" id="searchInput" placeholder="Search channels...">
+      <select id="categoryFilter">
+        <option value="all">All Countries</option>
+      </select>
+    </div>
+  </header>
 
-    <h2>Featured Stations</h2>
-    <div class="channel-grid" id="featured"></div>
+  <main id="genreSections">
+    <!-- Genre rows load dynamically -->
+  </main>
+
+  <div class="player-overlay" id="playerOverlay">
+    <div class="player-container">
+      <video id="videoPlayer" controls autoplay></video>
+      <button id="closePlayer">✕</button>
+    </div>
   </div>
 
   <script src="script.js"></script>
