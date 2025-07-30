@@ -7,11 +7,12 @@ async function loadChannels() {
   document.getElementById("providerMsg").innerText = data.provider.user_message;
   const grid = document.getElementById("channelGrid");
 
-  // Autoplay the first channel
+  // Initialize Shaka on first load
+  await initShaka();
+
   const firstPlayable = data.channels.find(c => c.url);
   if (firstPlayable) playChannel(firstPlayable);
 
-  // Render all channels
   data.channels.forEach(channel => {
     if (!channel.url) return;
 
@@ -26,42 +27,55 @@ async function loadChannels() {
   });
 }
 
-function playChannel(channel) {
-  const video = document.getElementById("videoPlayer");
+async function initShaka() {
+  shaka.polyfill.installAll();
 
-  // Reset the player if it exists
-  if (player) {
-    player.reset();
+  if (!shaka.Player.isBrowserSupported()) {
+    alert("Shaka Player is not supported in this browser.");
+    return;
   }
 
-  player = dashjs.MediaPlayer().create();
-  player.initialize(video, null, false); // Delay until config is set
+  const video = document.getElementById("videoPlayer");
+  player = new shaka.Player(video);
 
+  player.addEventListener("error", onErrorEvent);
+}
+
+function onErrorEvent(event) {
+  console.error("Shaka Error:", event.detail);
+}
+
+async function playChannel(channel) {
+  const video = document.getElementById("videoPlayer");
+
+  if (!player) await initShaka();
+
+  // Configure DRM if needed
   if (channel.drm_type === "clearkey" && channel.drm_key) {
     const [kidHex, keyHex] = channel.drm_key.split(":");
     const kid = hexToBase64(kidHex);
     const key = hexToBase64(keyHex);
 
-    player.setProtectionData({
-      "org.w3.clearkey": {
-        clearkeys: {
+    player.configure({
+      drm: {
+        clearKeys: {
           [kid]: key
-        },
-        priority: 0
+        }
       }
     });
+  } else {
+    player.configure({ drm: {} }); // Clear previous DRM config
   }
 
-  player.attachSource(channel.url);
+  try {
+    await player.load(channel.url);
+    console.log(`▶ Now playing: ${channel.name}`);
+  } catch (error) {
+    console.error("❌ Load failed:", error);
+  }
 
-  // Attempt to play (for autoplay policies)
   video.muted = false;
-  video.play().catch(err => {
-    console.warn("Autoplay blocked. Click anywhere to unmute.");
-  });
-
-  console.log("▶ Now Playing:", channel.name);
-  console.log("🔗", channel.url);
+  video.play().catch(() => {});
 }
 
 function hexToBase64(hex) {
@@ -72,7 +86,7 @@ function hexToBase64(hex) {
   );
 }
 
-// Enable sound on first click (required by browsers)
+// Allow audio on first user interaction
 document.body.addEventListener('click', () => {
   const video = document.getElementById("videoPlayer");
   video.muted = false;
