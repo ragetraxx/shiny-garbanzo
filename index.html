@@ -2,24 +2,92 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RageTV+</title>
-  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { margin: 0; background: #000; color: #fff; font-family: sans-serif; }
+    h1 { color: #e50914; text-align: center; }
+    #videoPlayer { width: 100%; max-width: 960px; margin: 20px auto; display: block; background: #000; border: 2px solid #e50914; border-radius: 10px; }
+    .grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 20px; }
+    .channel { width: 100px; cursor: pointer; text-align: center; }
+    .channel img { width: 100%; border-radius: 5px; }
+    .channel p { font-size: 12px; }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>RageTV+</h1>
-    <p id="providerMsg"></p>
-  </header>
-
-  <main>
-    <div class="player-wrapper">
-      <video id="videoPlayer" autoplay muted playsinline controls></video>
-    </div>
-    <div id="channelGrid" class="grid"></div>
-  </main>
+  <h1>RageTV+</h1>
+  <video id="videoPlayer" autoplay muted controls playsinline></video>
+  <div id="channelGrid" class="grid"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.5/shaka-player.compiled.js"></script>
-  <script src="script.js"></script>
+  <script>
+    const video = document.getElementById("videoPlayer");
+    let player = null;
+
+    async function initShaka() {
+      shaka.polyfill.installAll();
+      if (!shaka.Player.isBrowserSupported()) {
+        alert("Shaka Player not supported in this browser.");
+        return;
+      }
+      player = new shaka.Player(video);
+      player.addEventListener("error", e => console.error("Shaka error", e.detail));
+    }
+
+    async function playChannel(channel) {
+      if (!player) await initShaka();
+
+      console.log("Selected:", channel.name);
+      console.log("URL:", channel.url);
+      console.log("DRM Key:", channel.drm_key);
+
+      if (channel.drm_type === "clearkey" && channel.drm_key) {
+        const [kidHex, keyHex] = channel.drm_key.split(":");
+        const kid = hexToBase64(kidHex);
+        const key = hexToBase64(keyHex);
+        player.configure({
+          drm: { clearKeys: { [kid]: key } }
+        });
+      } else {
+        player.configure({ drm: {} });
+      }
+
+      try {
+        await player.load(channel.url);
+        console.log("Now playing:", channel.name);
+        video.muted = false;
+        video.play();
+      } catch (e) {
+        console.error("Failed to load stream:", e);
+      }
+    }
+
+    function hexToBase64(hex) {
+      return btoa(hex.match(/\w{2}/g).map(b => String.fromCharCode(parseInt(b, 16))).join(""));
+    }
+
+    async function loadChannels() {
+      const res = await fetch("channel.json");
+      const json = await res.json();
+      const container = document.getElementById("channelGrid");
+
+      json.channels.forEach(channel => {
+        const el = document.createElement("div");
+        el.className = "channel";
+        el.innerHTML = `<img src="${channel.icon}" /><p>${channel.name}</p>`;
+        el.onclick = () => playChannel(channel);
+        container.appendChild(el);
+      });
+
+      const first = json.channels.find(c => c.url);
+      if (first) playChannel(first);
+    }
+
+    document.body.addEventListener('click', () => {
+      video.muted = false;
+      video.play().catch(() => {});
+    }, { once: true });
+
+    loadChannels();
+  </script>
 </body>
 </html>
