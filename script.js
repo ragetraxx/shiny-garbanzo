@@ -1,76 +1,105 @@
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const featured = [
-    {
-      name: "Rage Music TV",
-      logo: "https://i.imgur.com/a3iXI35.png",
-      stream: "https://stream.gia.tv/giatv/giatv-ragemusictv/ragemusictv/playlist.m3u8"
-    },
-    {
-      name: "RageTV",
-      logo: "https://i.imgur.com/Ym32WqZ.png",
-      stream: "https://stream.gia.tv/giatv/giatv-ragetv/ragetv/playlist.m3u8"
-    },
-    {
-      name: "SineManila",
-      logo: "https://i.imgur.com/2N1kh1D.png",
-      stream: "https://stream.gia.tv/giatv/giatv-sinemanila/sinemanila/playlist.m3u8"
-    },
-    {
-      name: "BIHM TV",
-      logo: "https://i.imgur.com/lemgLSj.png",
-      stream: "https://stream.gia.tv/giatv/giatv-bihmtv/bihmtv/playlist.m3u8"
-    }
-  ];
+const genreSections = document.getElementById("genreSections");
+const playerOverlay = document.getElementById("playerOverlay");
+const videoPlayer = document.getElementById("videoPlayer");
+const closePlayer = document.getElementById("closePlayer");
+const searchInput = document.getElementById("searchInput");
+const categoryFilter = document.getElementById("categoryFilter");
 
-  const featuredContainer = document.getElementById("featured");
-  const searchInput = document.getElementById("searchInput");
-  const searchResults = document.getElementById("searchResults");
+let allChannels = [];
+let allCategories = [];
 
-  function createChannelCard(channel) {
-    const div = document.createElement("div");
-    div.className = "channel";
-    div.innerHTML = `
-      <img src="${channel.logo}" alt="${channel.name}" />
-      <div class="channel-name">${channel.name}</div>
-    `;
-    div.addEventListener("click", () => {
-      window.open(channel.stream, "_blank");
-    });
-    return div;
-  }
+// Load channels & categories
+async function loadData() {
+  const [channelsRes, categoriesRes] = await Promise.all([
+    fetch("https://iptv-org.github.io/api/channels.json"),
+    fetch("https://iptv-org.github.io/api/categories.json")
+  ]);
 
-  // Load featured channels
-  featured.forEach(channel => {
-    featuredContainer.appendChild(createChannelCard(channel));
+  allChannels = await channelsRes.json();
+  allCategories = await categoriesRes.json();
+
+  // Populate country dropdown
+  const countries = [...new Set(allChannels.map(c => c.country || "Unknown"))].sort();
+  countries.forEach(ct => {
+    const option = document.createElement("option");
+    option.value = ct;
+    option.textContent = ct;
+    categoryFilter.appendChild(option);
   });
 
-  // Fetch and search channels from local JSON file
-  fetch("all-channels.json")
-    .then(response => response.json())
-    .then(data => {
-      let allChannels = [];
-      data.forEach(category => {
-        allChannels = allChannels.concat(category.channels);
-      });
+  displayGenres();
+}
 
-      searchInput.addEventListener("input", () => {
-        const query = searchInput.value.toLowerCase();
-        searchResults.innerHTML = "";
-        if (query) {
-          const results = allChannels.filter(channel =>
-            channel.name.toLowerCase().includes(query)
-          );
-          results.forEach(channel => {
-            const div = createChannelCard({
-              name: channel.name,
-              logo: channel.logo,
-              stream: channel.url
-            });
-            searchResults.appendChild(div);
-          });
-        }
-      });
+// Display genre rows
+function displayGenres() {
+  genreSections.innerHTML = "";
+
+  allCategories.forEach(cat => {
+    const section = document.createElement("div");
+    section.className = "genre-section";
+
+    const title = document.createElement("h2");
+    title.className = "genre-title";
+    title.textContent = cat.name;
+
+    const row = document.createElement("div");
+    row.className = "channel-row";
+
+    const genreChannels = allChannels.filter(ch => ch.category === cat.id);
+    genreChannels.forEach(ch => {
+      if (!filterMatch(ch)) return;
+
+      const card = document.createElement("div");
+      card.className = "channel-card";
+      card.innerHTML = `
+        <img src="${ch.logo || 'https://via.placeholder.com/150x100?text=No+Logo'}" alt="${ch.name}">
+        <div class="channel-name">${ch.name}</div>
+      `;
+      card.addEventListener("click", () => playChannel(ch.url));
+      row.appendChild(card);
     });
+
+    if (row.childElementCount > 0) {
+      section.appendChild(title);
+      section.appendChild(row);
+      genreSections.appendChild(section);
+    }
+  });
+}
+
+// Play selected channel
+function playChannel(url) {
+  if (!url) return alert("Stream URL not available.");
+  if (Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(videoPlayer);
+  } else if (videoPlayer.canPlayType("application/vnd.apple.mpegurl")) {
+    videoPlayer.src = url;
+  }
+  playerOverlay.style.display = "flex";
+}
+
+// Close player
+closePlayer.addEventListener("click", () => {
+  videoPlayer.pause();
+  videoPlayer.src = "";
+  playerOverlay.style.display = "none";
 });
-</script>
+
+// Search and filter
+searchInput.addEventListener("input", displayGenres);
+categoryFilter.addEventListener("change", displayGenres);
+
+function filterMatch(channel) {
+  const searchTerm = searchInput.value.toLowerCase();
+  const selectedCountry = categoryFilter.value;
+
+  const matchesSearch = channel.name.toLowerCase().includes(searchTerm);
+  const matchesCountry = selectedCountry === "all" || channel.country === selectedCountry;
+
+  return matchesSearch && matchesCountry;
+}
+
+// Initialize
+loadData();
