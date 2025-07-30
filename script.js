@@ -1,61 +1,60 @@
-let player = null;
+let player;
 
-async function loadChannels() {
-  const res = await fetch("channel.json");
-  const data = await res.json();
-
-  document.getElementById("providerMsg").innerText = data.provider.user_message;
-  const grid = document.getElementById("channelGrid");
-
-  // Initialize Shaka on first load
-  await initShaka();
-
-  const firstPlayable = data.channels.find(c => c.url);
-  if (firstPlayable) playChannel(firstPlayable);
-
-  data.channels.forEach(channel => {
-    if (!channel.url) return;
-
-    const item = document.createElement("div");
-    item.className = "channel";
-    item.innerHTML = `
-      <img src="${channel.icon}" alt="${channel.name}" />
-      <p>${channel.name}</p>
-    `;
-    item.onclick = () => playChannel(channel);
-    grid.appendChild(item);
-  });
-}
-
-async function initShaka() {
+async function initApp() {
   shaka.polyfill.installAll();
 
   if (!shaka.Player.isBrowserSupported()) {
-    alert("Shaka Player is not supported in this browser.");
+    showError("Shaka Player is not supported in this browser.");
     return;
   }
 
-  const video = document.getElementById("videoPlayer");
+  const video = document.getElementById("video");
   player = new shaka.Player(video);
 
-  player.addEventListener("error", onErrorEvent);
+  player.addEventListener("error", onError);
+
+  try {
+    const response = await fetch("channel.json");
+    const data = await response.json();
+    populateChannelSelect(data.channels);
+  } catch (err) {
+    showError("Failed to load channel list.");
+    console.error(err);
+  }
 }
 
-function onErrorEvent(event) {
-  console.error("Shaka Error:", event.detail);
+function populateChannelSelect(channels) {
+  const select = document.getElementById("channelSelect");
+  select.innerHTML = ""; // clear existing
+
+  channels.forEach((channel, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    option.textContent = channel.name;
+    select.appendChild(option);
+  });
+
+  select.onchange = () => {
+    const selected = channels[select.value];
+    playChannel(selected);
+  };
+
+  // Auto-play first channel
+  if (channels.length > 0) {
+    select.selectedIndex = 0;
+    playChannel(channels[0]);
+  }
 }
 
-async function playChannel(channel) {
-  const video = document.getElementById("videoPlayer");
+function playChannel(channel) {
+  if (!channel || !channel.url) return;
 
-  if (!player) await initShaka();
+  console.log("Loading:", channel.name);
 
-  // Configure DRM if needed
   if (channel.drm_type === "clearkey" && channel.drm_key) {
     const [kidHex, keyHex] = channel.drm_key.split(":");
     const kid = hexToBase64(kidHex);
     const key = hexToBase64(keyHex);
-
     player.configure({
       drm: {
         clearKeys: {
@@ -64,33 +63,29 @@ async function playChannel(channel) {
       }
     });
   } else {
-    player.configure({ drm: {} }); // Clear previous DRM config
+    player.configure({ drm: {} }); // No DRM
   }
 
-  try {
-    await player.load(channel.url);
-    console.log(`▶ Now playing: ${channel.name}`);
-  } catch (error) {
-    console.error("❌ Load failed:", error);
-  }
-
-  video.muted = false;
-  video.play().catch(() => {});
+  player.load(channel.url).then(() => {
+    console.log(`Now playing: ${channel.name}`);
+  }).catch(err => {
+    showError("Failed to load stream.");
+    console.error(err);
+  });
 }
 
 function hexToBase64(hex) {
-  return btoa(
-    hex.match(/\w{2}/g)
-       .map(b => String.fromCharCode(parseInt(b, 16)))
-       .join("")
-  );
+  return btoa(hex.match(/\w{2}/g).map(b => String.fromCharCode(parseInt(b, 16))).join(""));
 }
 
-// Allow audio on first user interaction
-document.body.addEventListener('click', () => {
-  const video = document.getElementById("videoPlayer");
-  video.muted = false;
-  video.play().catch(() => {});
-}, { once: true });
+function onError(event) {
+  console.error("Player error:", event.detail);
+  showError("Player error: " + event.detail.message);
+}
 
-loadChannels();
+function showError(msg) {
+  const errorDiv = document.getElementById("errorMessage");
+  errorDiv.textContent = msg;
+}
+
+document.addEventListener("DOMContentLoaded", initApp);
