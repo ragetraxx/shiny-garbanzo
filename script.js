@@ -1,116 +1,142 @@
-const channelList = document.getElementById("channelList");
-const playerOverlay = document.getElementById("playerOverlay");
-const videoPlayer = document.getElementById("videoPlayer");
-const closePlayer = document.getElementById("closePlayer");
-const searchInput = document.getElementById("searchInput");
+let jwPlayerInstance = null;
+let activeChannelName = null;
 
-let allChannels = [];
-
-// Fetch and parse M3U
-async function loadChannels() {
-  const res = await fetch("https://snapvisionxo.pages.dev/scripts/channel.js");
-  const text = await res.text();
-  allChannels = parseM3U(text);
-  displayChannels(allChannels);
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  document.getElementById('clock').textContent = `${h}:${m}:${s}`;
 }
 
-// Parse M3U to objects
-function parseM3U(data) {
-  const lines = data.split("\n");
-  const channels = [];
-  let current = {};
-
-  lines.forEach(line => {
-    line = line.trim();
-    if (line.startsWith("#EXTINF:")) {
-      const nameMatch = line.match(/,(.*)$/);
-      const logoMatch = line.match(/tvg-logo="(.*?)"/);
-      const keyMatch = data.match(/#KODIPROP:inputstream\.adaptive\.license_key=(.*?):(.*?)\n/);
-      current = {
-        name: nameMatch ? nameMatch[1] : "Unknown",
-        logo: logoMatch ? logoMatch[1] : "",
-        clearkey: keyMatch ? { kid: keyMatch[1], key: keyMatch[2] } : null,
-      };
-    } else if (line && !line.startsWith("#")) {
-      current.url = line;
-      channels.push({ ...current });
-    }
-  });
-  return channels;
-}
-
-// Display channels
-function displayChannels(channels) {
-  channelList.innerHTML = "";
-  channels.forEach(channel => {
-    const card = document.createElement("div");
-    card.className = "channel-card";
-    card.innerHTML = `
-      <img src="${channel.logo || 'https://via.placeholder.com/150x100?text=No+Logo'}" alt="${channel.name}">
-      <div class="channel-name">${channel.name}</div>
-      ${channel.clearkey ? '<div class="drm-label">ClearKey</div>' : ""}
-    `;
-    card.addEventListener("click", () => playChannel(channel));
-    channelList.appendChild(card);
-  });
-}
-
-// Play selected channel
-async function playChannel(channel) {
-  const url = channel.url;
-
-  // Clear any previous playback
-  videoPlayer.pause();
-  videoPlayer.src = "";
-  playerOverlay.style.display = "flex";
-
-  if (url.endsWith(".m3u8")) {
-    // Play M3U8 with HLS.js
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(url);
-      hls.attachMedia(videoPlayer);
-    } else {
-      videoPlayer.src = url;
-    }
-  } 
-  else if (url.endsWith(".mpd") && channel.clearkey) {
-    // Play MPD with Shaka + ClearKey
-    const player = new shaka.Player(videoPlayer);
-    player.configure({
-      drm: {
-        clearKeys: {
-          [channel.clearkey.kid]: channel.clearkey.key
-        }
-      }
+function populateCategoryDropdown() {
+    const categorySelect = document.getElementById('categoryFilter');
+    const categories = Array.from(new Set(channels.map(c => c.category))).sort();
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        categorySelect.appendChild(option);
     });
-    try {
-      await player.load(url);
-    } catch (err) {
-      alert("Error playing MPD: " + err);
-    }
-  } 
-  else {
-    alert("Unsupported stream format or missing ClearKey!");
-  }
 }
 
-// Close player
-closePlayer.addEventListener("click", () => {
-  videoPlayer.pause();
-  videoPlayer.src = "";
-  playerOverlay.style.display = "none";
+function setupChannelList() {
+    const list = document.getElementById('channelList');
+    const countDisplay = document.getElementById('channelCount');
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const selectedCategory = document.getElementById('categoryFilter').value;
+    list.innerHTML = '';
+
+    let visibleCount = 0;
+
+    const sortedChannels = [...channels].sort((a, b) => a.name.localeCompare(b.name));
+
+    sortedChannels.forEach((channel) => {
+        const matchCategory = selectedCategory === 'all' || channel.category === selectedCategory;
+        const matchSearch = channel.name.toLowerCase().includes(search);
+        if (matchCategory && matchSearch) {
+            visibleCount++;
+
+            const li = document.createElement('li');
+            li.tabIndex = 0;
+            li.onclick = () => loadChannelByName(channel.name);
+
+            if (channel.name === activeChannelName) li.classList.add('active');
+
+            li.textContent = channel.name;
+            list.appendChild(li);
+        }
+    });
+
+    countDisplay.textContent = `Total Channel${visibleCount !== 1 ? 's' : ''}: ${visibleCount}`;
+}
+
+function initPlayer() {
+    jwPlayerInstance = jwplayer("player").setup({
+        width: "100%",
+        height: "100%",
+        autostart: false,
+        stretching: "exactfit",
+        aspectratio: "16:9",
+        primary: "html5",
+        hlshtml: true,
+        displaytitle: false,
+        logo: { hide: true }
+    });
+
+    jwPlayerInstance.on('error', showFallbackMessage);
+    jwPlayerInstance.on('play', hideFallbackMessage);
+}
+
+function loadChannelByName(name) {
+    const channel = channels.find(c => c.name === name);
+    if (!channel) return;
+
+    activeChannelName = name;
+    setupChannelList();
+
+    const config = {
+        file: channel.url,
+        title: channel.name,
+        autostart: true
+    };
+
+    if (channel.type === 'mpd' && channel.drm) {
+        config.drm = channel.drm;
+    }
+    
+    document.title = `${channel.name} | SnapvisionXO`;
+
+    hideFallbackMessage();
+    jwPlayerInstance.setup(config);
+}
+
+function showFallbackMessage() {
+    document.getElementById('fallbackMessage').style.display = 'block';
+}
+
+function hideFallbackMessage() {
+    document.getElementById('fallbackMessage').style.display = 'none';
+}
+
+window.addEventListener('load', () => {
+    initPlayer();
+    populateCategoryDropdown();
+    setupChannelList();
+    updateClock();
+    setInterval(updateClock, 1000);
+    const loadingScreen = document.getElementById('loadingScreen');
+    setTimeout(() => {
+        loadingScreen.classList.add('hidden');
+        setTimeout(() => {
+            document.getElementById('popupOverlay').classList.add('active');
+        }, 400);
+    }, 4000);
 });
 
-// Search filter
-searchInput.addEventListener("input", () => {
-  const term = searchInput.value.toLowerCase();
-  const filtered = allChannels.filter(ch => ch.name.toLowerCase().includes(term));
-  displayChannels(filtered);
+function closePopup() {
+  document.getElementById('popupOverlay').classList.remove('active');
+}
+
+window.addEventListener('beforeunload', () => {
+    if (jwPlayerInstance) {
+        jwPlayerInstance.remove();
+    }
 });
 
-// Initialize
-document.addEventListener("DOMContentLoaded", () => {
-  shaka.polyfill.installAll(); // Initialize Shaka
-  loadChannels();
-});
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function ctrlShiftKey(e, keyCode) {
+    return e.ctrlKey && e.shiftKey && e.keyCode === keyCode.charCodeAt(0);
+}
+
+document.onkeydown = (e) => {
+    if (
+        e.keyCode === 123 ||
+        ctrlShiftKey(e, 'I') ||
+        ctrlShiftKey(e, 'J') ||
+        ctrlShiftKey(e, 'C') ||
+        (e.ctrlKey && e.keyCode === 'U'.charCodeAt(0))
+    )
+        return false;
+};
