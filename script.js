@@ -5,7 +5,12 @@ async function loadChannels() {
   document.getElementById("providerMsg").innerText = data.provider.user_message;
   const grid = document.getElementById("channelGrid");
 
+  const firstPlayable = data.channels.find(c => c.url);
+  if (firstPlayable) playChannel(firstPlayable);
+
   data.channels.forEach(channel => {
+    if (!channel.url) return;
+
     const item = document.createElement("div");
     item.className = "channel";
     item.innerHTML = `
